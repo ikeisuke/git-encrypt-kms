@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+# Include the git setup script. This parses and normalized CLI arguments.
+. $(git --exec-path)/git-sh-setup
+
+function install() {
+  local attributes=$GIT_DIR/info/attributes
+  [ -z "$(git config --get --local merge.renormalize)" ] && git config --add merge.renormalize true
+  [ -z "$(git config --get --local filter.git-encrypt.smudge)" ] && git config --add filter.git-encrypt.smudge "git-encrypt --smudge"
+  [ -z "$(git config --get --local filter.git-encrypt.clean)" ] && git config --add filter.git-encrypt.clean "git-encrypt --clean"
+  [ -z "$(git config --get --local  diff.git-encrypt.textconv)" ] &&  git config --add diff.git-encrypt.textconv "git-encrypt --diff"
+  touch $attributes
+  grep ".gitattributes !filter !diff" $attributes >/dev/null 2>&1
+  [ "0" == "$?" ] || echo ".gitattributes !filter !diff" >> $GIT_DIR/info/attributes
+}
+
+function add_filter_pattern() {
+  local pattern="$1" dir=$(git rev-parse --show-toplevel)
+  touch $dir/.gitattributes
+  [ -n "$pattern" ] && echo "$pattern filter=git-encrypt diff=git-encrypt" >> $dir/.gitattributes
+}
+
+function list_filter_patterns() {
+  local dir=$(git rev-parse --show-toplevel)
+  grep "filter=git-encrypt diff=git-encrypt" $dir/.gitattributes 2>/dev/null | awk '{print $1}'
+}
+
+function clean() {
+  base64
+}
+
+function smudge() {
+  base64 -D 2>/dev/null || cat
+}
+
+function diff() {
+  base64 -D "$1" 2>/dev/null || cat "$1"
+}
+
+declare COMMAND="$1"
+shift 1
+
+case "$COMMAND" in
+  -h|--help) "$0" -h; exit 0 ;;
+  --install) install;;
+  --add-pattern) add_filter_pattern "$1" ;;
+  --list-patterns) list_filter_patterns ;;
+  --clean) clean ;;
+  --smudge) smudge ;;
+  --diff) diff "$1" ;;
+esac
+
