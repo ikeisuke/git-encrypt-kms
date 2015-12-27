@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+OPTIONS_SPEC='git encrypt --install
+git encrypt --add-pattern <pattern>
+git encrypt --list-patterns
+--
+install Installs encrypt filters script settings and encryption config.
+add-pattern Adds pattern for encryption file.
+list-patterns Lists pattern for encrytion target.'
 
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
