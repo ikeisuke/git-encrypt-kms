@@ -20,12 +20,35 @@ function add_attribute() {
 }
 
 function install() {
-  local attributes=$GIT_DIR/info/attributes
+  local attributes=$GIT_DIR/info/attributes \
+        encrypted="$(git rev-parse --show-toplevel)/.gitencrypted"
   add_or_replace_git_config merge.renormalize true
   add_or_replace_git_config filter.git-encrypt.clean  "git-encrypt --clean"
   add_or_replace_git_config filter.git-encrypt.smudge "git-encrypt --smudge"
   add_or_replace_git_config diff.git-encrypt.textconv "git-encrypt --diff"
   add_attribute ".gitattributes !filter !diff" $attributes
+  add_attribute ".gitencrypted !filter !diff" $attributes
+  echo -n "Input your aws profile name [default]: "
+  read profile
+  [ -z "$profile" ] && profile='default'
+  add_or_replace_git_config encrypt.kms.profile "$profile"
+  echo -n "Input your aws kms alias: "
+  read alias
+  [ -z "$alias" ] && exit 1
+  add_or_replace_git_config encrypt.kms.alias "$alias"
+  [ -e "$encrypted" ] || aws kms generate-data-key-without-plaintext \
+    --key-id "alias/$alias" --profile "$profile" \
+    --key-spec AES_256 --query CiphertextBlob \
+    --output text | base64 -D > $encrypted
+}
+
+function decrypted_data_key() {
+  local file="$(git rev-parse --show-toplevel)/.gitencrypted" \
+        decrypted=$GIT_DIR/info/decrypted-data-key \
+        profile="$(git config --get encrypt.kms.profile)"
+  [ -e $decrypted ] || aws kms decrypt --profile "$profile" \
+    --ciphertext-blob "fileb://${file}" | base64 -D > $decrypted
+  cat $decrypted
 }
 
 function add_filter_pattern() {
@@ -39,15 +62,18 @@ function list_filter_patterns() {
 }
 
 function clean() {
-  base64
+  local pass="pass:$(decrypted_data_key)"
+  openssl enc -base64 -aes-256-cbc -pass $pass
 }
 
 function smudge() {
-  base64 -D 2>/dev/null || cat
+  local pass="pass:$(decrypted_data_key)"
+  openssl enc -d -base64 -aes-256-cbc -pass $pass 2>/dev/null || cat
 }
 
 function diff() {
-  base64 -D "$1" 2>/dev/null || cat "$1"
+  local pass="pass:$(decrypted_data_key)"
+  openssl enc -d -base64 -aes-256-cbc -pass $pass -in "$1" 2>/dev/null || cat "$1"
 }
 
 declare COMMAND="$1"
@@ -55,7 +81,7 @@ shift 1
 
 case "$COMMAND" in
   -h|--help) "$0" -h; exit 0 ;;
-  --install) install;;
+  --install) install "$PROFILE";;
   --add-pattern) add_filter_pattern "$1" ;;
   --list-patterns) list_filter_patterns ;;
   --clean) clean ;;
