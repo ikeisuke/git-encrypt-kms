@@ -3,21 +3,34 @@
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
 
+function add_or_replace_git_config() {
+  local key="$1" value=$(git config --get --local "$1") newvalue="$2"
+  local command="--replace-all"
+  [ "$value" == "$newvalue" ] && return 0
+  [ -z "$value" ] && command="--add"
+  git config $command "$key" "$newvalue"
+}
+
+function add_attribute() {
+  local attribute="$1" file="$2"
+  [ -z "$file" ] && file="$(git rev-parse --show-toplevel)/.gitattributes"
+  [ ! -f "$file" ] && touch "$file"
+  grep "$attribute" "$file" >/dev/null 2>&1
+  [ "0" == "$?" ] || echo "$attribute" >> "$file"
+}
+
 function install() {
   local attributes=$GIT_DIR/info/attributes
-  [ -z "$(git config --get --local merge.renormalize)" ] && git config --add merge.renormalize true
-  [ -z "$(git config --get --local filter.git-encrypt.smudge)" ] && git config --add filter.git-encrypt.smudge "git-encrypt --smudge"
-  [ -z "$(git config --get --local filter.git-encrypt.clean)" ] && git config --add filter.git-encrypt.clean "git-encrypt --clean"
-  [ -z "$(git config --get --local  diff.git-encrypt.textconv)" ] &&  git config --add diff.git-encrypt.textconv "git-encrypt --diff"
-  touch $attributes
-  grep ".gitattributes !filter !diff" $attributes >/dev/null 2>&1
-  [ "0" == "$?" ] || echo ".gitattributes !filter !diff" >> $GIT_DIR/info/attributes
+  add_or_replace_git_config merge.renormalize true
+  add_or_replace_git_config filter.git-encrypt.clean  "git-encrypt --clean"
+  add_or_replace_git_config filter.git-encrypt.smudge "git-encrypt --smudge"
+  add_or_replace_git_config diff.git-encrypt.textconv "git-encrypt --diff"
+  add_attribute ".gitattributes !filter !diff" $attributes
 }
 
 function add_filter_pattern() {
-  local pattern="$1" dir=$(git rev-parse --show-toplevel)
-  touch $dir/.gitattributes
-  [ -n "$pattern" ] && echo "$pattern filter=git-encrypt diff=git-encrypt" >> $dir/.gitattributes
+  local pattern="$1"
+  add_attribute "$pattern filter=git-encrypt diff=git-encrypt"
 }
 
 function list_filter_patterns() {
