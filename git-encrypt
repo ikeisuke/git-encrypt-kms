@@ -85,6 +85,8 @@ function diff() {
 declare COMMAND="$1"
 shift 1
 
+[ -z "$option" ] && COMMAND='-h'
+
 case "$COMMAND" in
   -h|--help) "$0" -h; exit 0 ;;
   --install) install "$PROFILE";;
@@ -93,5 +95,6 @@ case "$COMMAND" in
   --clean) clean ;;
   --smudge) smudge ;;
   --diff) diff "$1" ;;
+  *) echo "Unknown option: ${option}"; "$0" -h; exit 1;;
 esac
 
