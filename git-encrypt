@@ -33,8 +33,7 @@ function install() {
   add_or_replace_git_config filter.git-encrypt.clean  "git-encrypt --clean"
   add_or_replace_git_config filter.git-encrypt.smudge "git-encrypt --smudge"
   add_or_replace_git_config diff.git-encrypt.textconv "git-encrypt --diff"
-  add_attribute ".gitattributes !filter !diff" $attributes
-  add_attribute ".gitencrypted !filter !diff" $attributes
+  add_attribute ".git* !filter !diff" $attributes
   echo -n "Input your aws profile name [default]: "
   read profile
   [ -z "$profile" ] && profile='default'
