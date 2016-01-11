@@ -34,18 +34,25 @@ function install() {
   add_or_replace_git_config filter.git-encrypt.smudge "git-encrypt --smudge"
   add_or_replace_git_config diff.git-encrypt.textconv "git-encrypt --diff"
   add_attribute ".git* !filter !diff" $attributes
-  echo -n "Input your aws profile name [default]: "
+  which aws >/dev/null 2>&1
+  [ $? -ne 0 ] && echo 'Aws-cli is not installed. Please install aws-cli or add installed directory to PATH environment.' && exit 1
+  aws configure list | grep access_key | grep 'not set' >/dev/null 2>&1
+  [ $? -eq 0 ] && echo 'You have no aws credentials. Please run `aws configure`' && exit 1
+  echo -n "Input your aws profile name []: "
   read profile
-  [ -z "$profile" ] && profile='default'
   add_or_replace_git_config encrypt.kms.profile "$profile"
-  echo -n "Input your aws kms alias: "
+  saved_alias=$(git config --get encrypt.kms.alias)
+  echo -n "Input your aws kms alias [$saved_alias]: "
   read alias
-  [ -z "$alias" ] && exit 1
+  [ -z "$alias" ] && [ -n "$saved_alias" ] && alias="$saved_alias"
+  [ -z "$alias" ] && echo "You must specify an alias. Please input you kms alias." && exit 1
   add_or_replace_git_config encrypt.kms.alias "$alias"
-  [ -e "$encrypted" ] || aws kms generate-data-key-without-plaintext \
-    --key-id "alias/$alias" --profile "$profile" \
+  profile_option=''
+  [ -n "$profile" ] && profile_option="--profile '$profile'"
+  [ -s "$encrypted" ] && echo "Encryption key is generated. If you want to regenerate encryption key. " || aws kms generate-data-key-without-plaintext \
+    --key-id "alias/$alias" $profile_option \
     --key-spec AES_256 --query CiphertextBlob \
-    --output text | base64 -D > $encrypted
+    --output text | base64 --decode > $encrypted 2>/dev/null
 }
 
 function decrypted_data_key() {
@@ -85,11 +92,9 @@ function diff() {
 declare COMMAND="$1"
 shift 1
 
-[ -z "$option" ] && COMMAND='-h'
-
 case "$COMMAND" in
-  -h|--help) "$0" -h; exit 0 ;;
-  --install) install "$PROFILE";;
+  --) "$0" -h; exit 0 ;;
+  --install) install;;
   --add-pattern) add_filter_pattern "$1" ;;
   --list-patterns) list_filter_patterns ;;
   --clean) clean ;;
