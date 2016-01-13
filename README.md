@@ -8,7 +8,18 @@ git encrypt --install
 git encrypt --add-pattern <pattern>  
 git encrypt --list-patterns  
 
-## Installing git encrypt
+## Installation
+
+### Dependencies
+
+The git-encrypt depends on the following libraries:
+
+* aws-cli for AWS Key Management Service
+* openssl for encryption and decryption
+
+### Installing git encrypt
+
+```git-encrypt``` must be placed somewhere PATH.
 
 ## Description
 
