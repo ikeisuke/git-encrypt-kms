@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 OPTIONS_SPEC='git encrypt --install
+git encrypt --configure
 git encrypt --add-pattern <pattern>
-git encrypt --list-patterns
 --
-install Installs encrypt filters script settings and encryption config.
-add-pattern Adds pattern for encryption file.
-list-patterns Lists pattern for encrytion target.'
+install Installs filter scripts.
+configure Configure aws and kms settings.
+add-pattern Adds pattern for encryption file.'
 
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
@@ -21,51 +21,71 @@ function add_attribute() {
   [ "0" == "$?" ] || echo "$attribute" >> "$file"
 }
 
+function die() {
+  exit 1
+}
+
+function ask_config() {
+  local key="$1" default="$2" message="$3"
+  configured=$(git config --get "$key")
+  [ -z $configured ] && configured="$default"
+  echo -n "Input $message [$configured]:"
+  read input
+  [ -z "$input" ] && input=$configured
+  git config --replace-all "$key" "$input"
+}
+
+function generate_encryption_key() {
+  local profile=$(git config --get encrypt.aws.profile)
+    region=$(git config --get encrypt.aws.region)
+    key=$(git config --get encrypt.kms.key-id)
+    data_key_file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
+  [ -f "$data_key_file" ] && return
+  [ -n "$profile" ] && profile="--profile '$profile'"
+  [ -n "$region" ] && region="--region '$region'"
+  aws kms generate-data-key-without-plaintext \
+    $profile \
+    $region \
+    --key-id "$key" \
+    --key-spec AES_256 \
+    --query CiphertextBlob \
+    --output text | base64 --decode > $data_key_file || die
+}
+
+function decrypted_data_key() {
+  local profile=$(git config --get encrypt.aws.profile)
+    region=$(git config --get encrypt.aws.region)
+    file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
+    profile="$(git config --get encrypt.kms.profile)"
+  [ -n $profile ] && profile="--profile '$profile'"
+  [ -n $region ] && region="--region '$region'"
+  aws kms decrypt \
+    $profile \
+    $region \
+    --ciphertext-blob "fileb://${file}" \
+    --query Plaintext
+    --output text
+}
+
 function install() {
-  local attributes=$GIT_DIR/info/attributes \
-        encrypted="$GIT_PROJECT_TOP_LEVEL/.gitencrypted"
   git config --replace-all merge.renormalize true
   git config --replace-all filter.git-encrypt.clean  "git-encrypt --clean"
   git config --replace-all filter.git-encrypt.smudge "git-encrypt --smudge"
   git config --replace-all diff.git-encrypt.textconv "git-encrypt --diff"
-  add_attribute ".git* !filter !diff" $attributes
-  which aws >/dev/null 2>&1
-  [ $? -ne 0 ] && echo 'Aws-cli is not installed. Please install aws-cli or add installed directory to PATH environment.' && exit 1
-  aws configure list | grep access_key | grep 'not set' >/dev/null 2>&1
-  [ $? -eq 0 ] && echo 'You have no aws credentials. Please run `aws configure`' && exit 1
-  echo -n "Input your aws profile name []: "
-  read profile
-  git config --replace-all encrypt.kms.profile "$profile"
-  saved_alias=$(git config --get encrypt.kms.alias)
-  echo -n "Input your aws kms alias [$saved_alias]: "
-  read alias
-  [ -z "$alias" ] && [ -n "$saved_alias" ] && alias="$saved_alias"
-  [ -z "$alias" ] && echo "You must specify an alias. Please input you kms alias." && exit 1
-  git config --replace-all encrypt.kms.alias "$alias"
-  profile_option=''
-  [ -n "$profile" ] && profile_option="--profile '$profile'"
-  [ -s "$encrypted" ] && echo "Encryption key is generated. If you want to regenerate encryption key. " || aws kms generate-data-key-without-plaintext \
-    --key-id "alias/$alias" $profile_option \
-    --key-spec AES_256 --query CiphertextBlob \
-    --output text | base64 --decode > $encrypted 2>/dev/null
+  add_attribute ".git* !filter !diff" $GIT_DIR/info/attributes
+  configure
+  generate_encryption_key
 }
 
-function decrypted_data_key() {
-  local file="$GIT_PROJECT_TOP_LEVEL/.gitencrypted" \
-        decrypted=$GIT_DIR/info/decrypted-data-key \
-        profile="$(git config --get encrypt.kms.profile)"
-  [ -e $decrypted ] || aws kms decrypt --profile "$profile" \
-    --ciphertext-blob "fileb://${file}" --query Plaintext --output text | base64 -D > $decrypted
-  cat $decrypted
+function configure() {
+  ask_config "encrypt.aws.profile" "" "your aws profile"
+  ask_config "encrypt.aws.region"  "" "region to use"
+  ask_config "encrypt.kms.key-id"  "" "Specified key for AWS KMS"
 }
 
 function add_filter_pattern() {
   local pattern="$1"
   add_attribute "$pattern filter=git-encrypt diff=git-encrypt"
-}
-
-function list_filter_patterns() {
-  grep "filter=git-encrypt diff=git-encrypt" $GIT_PROJECT_TOP_LEVEL/.gitattributes 2>/dev/null | awk '{print $1}'
 }
 
 function clean() {
@@ -88,7 +108,8 @@ shift 1
 
 case "$COMMAND" in
   --) "$0" -h; exit 0 ;;
-  --install) install;;
+  --install) install ;;
+  --configure) configure ;;
   --add-pattern) add_filter_pattern "$1" ;;
   --list-patterns) list_filter_patterns ;;
   --clean) clean ;;
