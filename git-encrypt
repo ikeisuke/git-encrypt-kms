@@ -10,14 +10,6 @@ list-patterns Lists pattern for encrytion target.'
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
 
-function add_or_replace_git_config() {
-  local key="$1" value=$(git config --get --local "$1") newvalue="$2"
-  local command="--replace-all"
-  [ "$value" == "$newvalue" ] && return 0
-  [ -z "$value" ] && command="--add"
-  git config $command "$key" "$newvalue"
-}
-
 function add_attribute() {
   local attribute="$1" file="$2"
   [ -z "$file" ] && file="$(git rev-parse --show-toplevel)/.gitattributes"
@@ -29,10 +21,10 @@ function add_attribute() {
 function install() {
   local attributes=$GIT_DIR/info/attributes \
         encrypted="$(git rev-parse --show-toplevel)/.gitencrypted"
-  add_or_replace_git_config merge.renormalize true
-  add_or_replace_git_config filter.git-encrypt.clean  "git-encrypt --clean"
-  add_or_replace_git_config filter.git-encrypt.smudge "git-encrypt --smudge"
-  add_or_replace_git_config diff.git-encrypt.textconv "git-encrypt --diff"
+  git config --replace-all merge.renormalize true
+  git config --replace-all filter.git-encrypt.clean  "git-encrypt --clean"
+  git config --replace-all filter.git-encrypt.smudge "git-encrypt --smudge"
+  git config --replace-all diff.git-encrypt.textconv "git-encrypt --diff"
   add_attribute ".git* !filter !diff" $attributes
   which aws >/dev/null 2>&1
   [ $? -ne 0 ] && echo 'Aws-cli is not installed. Please install aws-cli or add installed directory to PATH environment.' && exit 1
@@ -40,13 +32,13 @@ function install() {
   [ $? -eq 0 ] && echo 'You have no aws credentials. Please run `aws configure`' && exit 1
   echo -n "Input your aws profile name []: "
   read profile
-  add_or_replace_git_config encrypt.kms.profile "$profile"
+  git config --replace-all encrypt.kms.profile "$profile"
   saved_alias=$(git config --get encrypt.kms.alias)
   echo -n "Input your aws kms alias [$saved_alias]: "
   read alias
   [ -z "$alias" ] && [ -n "$saved_alias" ] && alias="$saved_alias"
   [ -z "$alias" ] && echo "You must specify an alias. Please input you kms alias." && exit 1
-  add_or_replace_git_config encrypt.kms.alias "$alias"
+  git config --replace-all encrypt.kms.alias "$alias"
   profile_option=''
   [ -n "$profile" ] && profile_option="--profile '$profile'"
   [ -s "$encrypted" ] && echo "Encryption key is generated. If you want to regenerate encryption key. " || aws kms generate-data-key-without-plaintext \
