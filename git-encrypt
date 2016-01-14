@@ -10,9 +10,12 @@ list-patterns Lists pattern for encrytion target.'
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
 
+[ -z $GIT_DIR ] && GIT_DIR="$(git rev-parse --git-dir)"
+GIT_PROJECT_TOP_LEVEL="$(git rev-parse --show-toplevel)"
+
 function add_attribute() {
   local attribute="$1" file="$2"
-  [ -z "$file" ] && file="$(git rev-parse --show-toplevel)/.gitattributes"
+  [ -z "$file" ] && file="$GIT_PROJECT_TOP_LEVEL/.gitattributes"
   [ ! -f "$file" ] && touch "$file"
   grep "$attribute" "$file" >/dev/null 2>&1
   [ "0" == "$?" ] || echo "$attribute" >> "$file"
@@ -20,7 +23,7 @@ function add_attribute() {
 
 function install() {
   local attributes=$GIT_DIR/info/attributes \
-        encrypted="$(git rev-parse --show-toplevel)/.gitencrypted"
+        encrypted="$GIT_PROJECT_TOP_LEVEL/.gitencrypted"
   git config --replace-all merge.renormalize true
   git config --replace-all filter.git-encrypt.clean  "git-encrypt --clean"
   git config --replace-all filter.git-encrypt.smudge "git-encrypt --smudge"
@@ -48,7 +51,7 @@ function install() {
 }
 
 function decrypted_data_key() {
-  local file="$(git rev-parse --show-toplevel)/.gitencrypted" \
+  local file="$GIT_PROJECT_TOP_LEVEL/.gitencrypted" \
         decrypted=$GIT_DIR/info/decrypted-data-key \
         profile="$(git config --get encrypt.kms.profile)"
   [ -e $decrypted ] || aws kms decrypt --profile "$profile" \
@@ -62,8 +65,7 @@ function add_filter_pattern() {
 }
 
 function list_filter_patterns() {
-  local dir=$(git rev-parse --show-toplevel)
-  grep "filter=git-encrypt diff=git-encrypt" $dir/.gitattributes 2>/dev/null | awk '{print $1}'
+  grep "filter=git-encrypt diff=git-encrypt" $GIT_PROJECT_TOP_LEVEL/.gitattributes 2>/dev/null | awk '{print $1}'
 }
 
 function clean() {
