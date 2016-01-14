@@ -60,7 +60,7 @@ function decrypted_data_key() {
         decrypted=$GIT_DIR/info/decrypted-data-key \
         profile="$(git config --get encrypt.kms.profile)"
   [ -e $decrypted ] || aws kms decrypt --profile "$profile" \
-    --ciphertext-blob "fileb://${file}" | base64 -D > $decrypted
+    --ciphertext-blob "fileb://${file}" --query Plaintext --output text | base64 -D > $decrypted
   cat $decrypted
 }
 
