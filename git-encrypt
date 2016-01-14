@@ -90,12 +90,15 @@ function add_filter_pattern() {
 
 function clean() {
   local pass="pass:$(decrypted_data_key)"
-  openssl enc -base64 -aes-256-cbc -pass $pass
+        data="$(cat -)"
+        salt="$(echo -n $data | sha1sum | head -c 16)"
+  echo -n $data | openssl enc -base64 -aes-256-cbc -pass $pass -S $salt
 }
 
 function smudge() {
   local pass="pass:$(decrypted_data_key)"
-  openssl enc -d -base64 -aes-256-cbc -pass $pass 2>/dev/null || cat
+        data="$(cat -)"
+  echo -n $data | openssl enc -d -base64 -aes-256-cbc -pass $pass 2>/dev/null || echo -n $data
 }
 
 function diff() {
