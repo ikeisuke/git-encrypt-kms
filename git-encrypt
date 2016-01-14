@@ -107,7 +107,7 @@ function diff() {
 }
 
 declare COMMAND="$1"
-shift 1
+shift 2
 
 case "$COMMAND" in
   --) "$0" -h; exit 0 ;;
