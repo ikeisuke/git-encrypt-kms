@@ -40,9 +40,9 @@ function generate_encryption_key() {
     region=$(git config --get encrypt.aws.region)
     key=$(git config --get encrypt.kms.key-id)
     data_key_file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
-  [ -f "$data_key_file" ] && return
-  [ -n "$profile" ] && profile="--profile '$profile'"
-  [ -n "$region" ] && region="--region '$region'"
+  [ -s "$data_key_file" ] && return
+  [ -n "$profile" ] && profile="--profile $profile"
+  [ -n "$region" ] && region="--region $region"
   aws kms generate-data-key-without-plaintext \
     $profile \
     $region \
