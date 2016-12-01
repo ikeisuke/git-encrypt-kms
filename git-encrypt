@@ -2,10 +2,16 @@
 OPTIONS_SPEC='git encrypt --install
 git encrypt --configure
 git encrypt --add-pattern <pattern>
+git encrypt --clean
+git encrypt --smudge
+git encrypt --diff
 --
 install Installs filter scripts.
 configure Configure aws and kms settings.
-add-pattern Adds pattern for encryption file.'
+add-pattern Adds pattern for encryption file.
+clean clean
+smudge smudge
+diff diff'
 
 # Include the git setup script. This parses and normalized CLI arguments.
 . $(git --exec-path)/git-sh-setup
@@ -52,19 +58,23 @@ function generate_encryption_key() {
     --output text | base64 --decode > $data_key_file || die
 }
 
-function decrypted_data_key() {
+function set_data_key() {
   local profile=$(git config --get encrypt.aws.profile)
     region=$(git config --get encrypt.aws.region)
     file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
-    profile="$(git config --get encrypt.kms.profile)"
-  [ -n $profile ] && profile="--profile '$profile'"
-  [ -n $region ] && region="--region '$region'"
+  git encrypt-agent start
+  hash=$(git encrypt-agent get --name $GIT_PROJECT_TOP_LEVEL)
+  if [ -n "${hash}" ]; then
+    return;
+  fi
+  [ -n $profile ] && profile="--profile $profile"
+  [ -n $region ] && region="--region $region"
   aws kms decrypt \
     $profile \
     $region \
     --ciphertext-blob "fileb://${file}" \
-    --query Plaintext
-    --output text
+    --query Plaintext \
+    --output text | base64 --decode | git encrypt-agent add --name $GIT_PROJECT_TOP_LEVEL > /dev/null
 }
 
 function install() {
@@ -74,13 +84,15 @@ function install() {
   git config --replace-all diff.git-encrypt.textconv "git-encrypt --diff"
   add_attribute ".git* !filter !diff" $GIT_DIR/info/attributes
   configure
-  generate_encryption_key
 }
 
 function configure() {
+  local data_key_file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
   ask_config "encrypt.aws.profile" "" "your aws profile"
   ask_config "encrypt.aws.region"  "" "region to use"
+  [ -s "$data_key_file" ] && return
   ask_config "encrypt.kms.key-id"  "" "Specified key for AWS KMS"
+  generate_encryption_key
 }
 
 function add_filter_pattern() {
@@ -89,21 +101,18 @@ function add_filter_pattern() {
 }
 
 function clean() {
-  local pass="pass:$(decrypted_data_key)"
-        data="$(cat -)"
-        salt="$(echo -n $data | sha1sum | head -c 16)"
-  echo -n $data | openssl enc -base64 -aes-256-cbc -pass $pass -S $salt
+  set_data_key
+  cat - | git encrypt-agent encrypt --name ${GIT_PROJECT_TOP_LEVEL}
 }
 
 function smudge() {
-  local pass="pass:$(decrypted_data_key)"
-        data="$(cat -)"
-  echo -n $data | openssl enc -d -base64 -aes-256-cbc -pass $pass 2>/dev/null || echo -n $data
+  set_data_key
+  cat - | git encrypt-agent decrypt --name ${GIT_PROJECT_TOP_LEVEL} 2>/dev/null || cat -
 }
 
 function diff() {
-  local pass="pass:$(decrypted_data_key)"
-  openssl enc -d -base64 -aes-256-cbc -pass $pass -in "$1" 2>/dev/null || cat "$1"
+  set_data_key
+  cat "$1" | git encrypt-agent decrypt --name $GIT_PROJECT_TOP_LEVEL 2>/dev/null || cat "$1"
 }
 
 declare COMMAND="$1"
@@ -114,10 +123,8 @@ case "$COMMAND" in
   --install) install ;;
   --configure) configure ;;
   --add-pattern) add_filter_pattern "$1" ;;
-  --list-patterns) list_filter_patterns ;;
   --clean) clean ;;
   --smudge) smudge ;;
   --diff) diff "$1" ;;
   *) echo "Unknown option: ${option}"; "$0" -h; exit 1;;
 esac
-
