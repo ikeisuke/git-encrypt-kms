@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 OPTIONS_SPEC='git encrypt --install
 git encrypt --configure
 git encrypt --add-pattern <pattern>
@@ -23,7 +24,7 @@ function add_attribute() {
   local attribute="$1" file="$2"
   [ -z "$file" ] && file="$GIT_PROJECT_TOP_LEVEL/.gitattributes"
   [ ! -f "$file" ] && touch "$file"
-  grep "$attribute" "$file" >/dev/null 2>&1
+  grep "$(printf %q "$attribute" | sed -e 's/\\ / /g')" "$file" >/dev/null 2>&1
   [ "0" == "$?" ] || echo "$attribute" >> "$file"
 }
 
@@ -49,9 +50,7 @@ function generate_encryption_key() {
   [ -s "$data_key_file" ] && return
   [ -n "$profile" ] && profile="--profile $profile"
   [ -n "$region" ] && region="--region $region"
-  aws kms generate-data-key-without-plaintext \
-    $profile \
-    $region \
+  aws kms generate-data-key-without-plaintext $profile $region \
     --key-id "$key" \
     --key-spec AES_256 \
     --query CiphertextBlob \
@@ -62,19 +61,26 @@ function set_data_key() {
   local profile=$(git config --get encrypt.aws.profile)
     region=$(git config --get encrypt.aws.region)
     file="$GIT_PROJECT_TOP_LEVEL/.gitdatakey"
-  git encrypt-agent start
-  hash=$(git encrypt-agent get --name $GIT_PROJECT_TOP_LEVEL)
+    pidfile="/tmp/git-encrypt.$(id -u)/git-encrypt.pid"
+  if [ -f "$pidfile" ]; then
+    line=$(ps --no-heading $(cat $pidfile))
+    if [ -z "$line" ]; then
+      rm -rf $(dirname $pidfile)
+    fi
+  fi
+  git-encrypt-agent start
+  hash=$(git-encrypt-agent get --name $GIT_PROJECT_TOP_LEVEL)
   if [ -n "${hash}" ]; then
     return;
   fi
-  [ -n $profile ] && profile="--profile $profile"
-  [ -n $region ] && region="--region $region"
+  [ -n "$profile" ] && profile="--profile $profile"
+  [ -n "$region" ] && region="--region $region"
   aws kms decrypt \
     $profile \
     $region \
     --ciphertext-blob "fileb://${file}" \
     --query Plaintext \
-    --output text | base64 --decode | git encrypt-agent add --name $GIT_PROJECT_TOP_LEVEL > /dev/null
+    --output text | base64 --decode | git-encrypt-agent add --name $GIT_PROJECT_TOP_LEVEL > /dev/null || die
 }
 
 function install() {
@@ -82,7 +88,7 @@ function install() {
   git config --replace-all filter.git-encrypt.clean  "git-encrypt --clean"
   git config --replace-all filter.git-encrypt.smudge "git-encrypt --smudge"
   git config --replace-all diff.git-encrypt.textconv "git-encrypt --diff"
-  add_attribute ".git* !filter !diff" $GIT_DIR/info/attributes
+  add_attribute '.git* !filter !diff' $GIT_DIR/info/attributes
   configure
 }
 
@@ -102,17 +108,17 @@ function add_filter_pattern() {
 
 function clean() {
   set_data_key
-  cat - | git encrypt-agent encrypt --name ${GIT_PROJECT_TOP_LEVEL}
+  cat - | git-encrypt-agent encrypt --name ${GIT_PROJECT_TOP_LEVEL} || die
 }
 
 function smudge() {
   set_data_key
-  cat - | git encrypt-agent decrypt --name ${GIT_PROJECT_TOP_LEVEL} 2>/dev/null || cat -
+  cat - | git-encrypt-agent decrypt --name ${GIT_PROJECT_TOP_LEVEL} || cat -
 }
 
 function diff() {
   set_data_key
-  cat "$1" | git encrypt-agent decrypt --name $GIT_PROJECT_TOP_LEVEL 2>/dev/null || cat "$1"
+  cat "$1" | git-encrypt-agent decrypt --name $GIT_PROJECT_TOP_LEVEL || cat "$1"
 }
 
 declare COMMAND="$1"
