@@ -12,9 +12,11 @@ load helper
   [ $(expr "${lines[0]}" : "usage: git encrypt") -ne 0 ]
 }
 
-# TODO
-#@test "--help prints help" {
-#}
+@test "--help prints help" {
+  repo_run git-encrypt --help
+  [ $status -eq 0 ]
+  [ $(expr "${lines[0]}" : "usage: git encrypt") -ne 0 ]
+}
 
 @test "--install" {
   repo_run git-encrypt --install
