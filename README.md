@@ -24,7 +24,7 @@ The git-encrypt depends on the following libraries:
 * [aws-cli](https://aws.amazon.com/jp/cli/)
   * ファイルの複合化のためにはデータキー用のKMSのキーに対する kms:Decrypt 権限が必要です
   * データキーを作成するには対象のKMSのキーに対する kms:GenerateDataKeyWithoutPlaintext 権限が必要です
-* [git-encryt-agent](https://github.com/ikeisuke/git-encrypt-agent/)
+* [git-encrypt-agent](https://github.com/ikeisuke/git-encrypt-agent/)
 
 
 ## プロジェクトへのインストール
@@ -91,4 +91,21 @@ $ cat path/to/encrypted_file # ここで暗号化されていればOK
 $ git encrypt --install
 $ git reset --hard
 $ cat path/to/encrypted_file # ここで複合化されていればOK
+```
+
+## Running tests
+
+Clone this repository with submodules so that the Bats framework is available:
+
+```bash
+$ git submodule update --init --recursive
+```
+
+If `./bats/bin/bats` does not exist, install Bats and ensure the
+`git-encrypt-agent` binary is in your `PATH`.
+
+Run the test suite with:
+
+```bash
+$ ./bats/bin/bats test
 ```
