@@ -35,7 +35,7 @@ function die() {
 function ask_config() {
   local key="$1" default="$2" message="$3"
   configured=$(git config --get "$key")
-  [ -z $configured ] && configured="$default"
+  [ -z "$configured" ] && configured="$default"
   echo -n "Input $message [$configured]:"
   read input
   [ -z "$input" ] && input=$configured
@@ -132,5 +132,5 @@ case "$COMMAND" in
   --clean) clean ;;
   --smudge) smudge ;;
   --diff) diff "$1" ;;
-  *) echo "Unknown option: ${option}"; "$0" -h; exit 1;;
+  *) echo "Unknown option: ${COMMAND}"; "$0" -h; exit 1;;
 esac
