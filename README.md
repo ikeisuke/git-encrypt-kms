@@ -24,7 +24,7 @@ The git-encrypt depends on the following libraries:
 * [aws-cli](https://aws.amazon.com/jp/cli/)
   * ファイルの複合化のためにはデータキー用のKMSのキーに対する kms:Decrypt 権限が必要です
   * データキーを作成するには対象のKMSのキーに対する kms:GenerateDataKeyWithoutPlaintext 権限が必要です
-* [git-encryt-agent](https://github.com/ikeisuke/git-encrypt-agent/)
+* [git-encrypt-agent](https://github.com/ikeisuke/git-encrypt-agent/)
 
 
 ## プロジェクトへのインストール
